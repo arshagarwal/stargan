@@ -234,6 +234,7 @@ class Solver(object):
         # Start training.
         print('Start training...')
         start_time = time.time()
+        epoch=1;
         for i in range(start_iters, start_iters+self.num_iters):
 
             # =================================================================================== #
@@ -244,8 +245,17 @@ class Solver(object):
             try:
                 x_real, label_org = next(data_iter)
             except:
+                print("starting {}th epoch".format(epoch))
+                epoch+=1;
                 data_iter = iter(data_loader)
                 x_real, label_org = next(data_iter)
+
+            if x_real.shape[0]!=self.batch_size:
+                epoch += 1;
+                print("starting {}th epoch".format(epoch))
+                data_iter = iter(data_loader)
+                x_real, label_org = next(data_iter)
+
 
             # Generate target domain labels randomly.
             rand_idx = torch.randperm(label_org.size(0))
