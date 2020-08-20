@@ -86,3 +86,102 @@ class Discriminator(nn.Module):
         out_src = self.conv1(h)
         out_cls = self.conv2(h)
         return out_src, out_cls.view(out_cls.size(0), out_cls.size(1))
+
+class Generator2(torch.nn.Module):
+    """Given latent vector, produces Image of the shape (128,128,3)
+      latent vector shape: [batch_size,z+ny]
+      where
+      z: is the number of parameters into which which image is encoded using Encoder_z (100)
+      ny:number of attributes in an image
+      """
+    def __init__(self,ny,l):
+        """
+
+        :param l: number of units in the latent vector
+        :param ny: number of categories
+        """
+        super(Generator2,self).__init__();
+        self.l=l
+
+        self.conv = torch.nn.ConvTranspose2d(self.l,1024,4,1,0,bias=False)
+
+
+        # embedding layer
+        self.embedding =torch.nn.Embedding(ny,50)
+        self.dense2 = torch.nn.Linear(50,4*4,bias=False)
+
+
+
+        # conv layers
+        self.conv0 = torch.nn.ConvTranspose2d(1025,512,4,2,1,bias=False)
+        self.conv1 = torch.nn.ConvTranspose2d(512,256,4,2,1,bias=False)
+
+        self.conv2 = torch.nn.ConvTranspose2d(256,128,4,2,1,bias=False)
+        self.conv3 = torch.nn.ConvTranspose2d(128,64,4,2,1,bias=False)
+        self.conv4 = torch.nn.ConvTranspose2d(64,3,4,2,1,bias=False)
+
+        #tanh activation
+        self.tanh=torch.nn.Tanh()
+
+        # batch_norm layers
+        self.batch_norm0=nn.InstanceNorm2d(512, affine=True, track_running_stats=True)
+        self.batch_norm1=nn.InstanceNorm2d(256, affine=True, track_running_stats=True)
+        self.batch_norm2 = nn.InstanceNorm2d(128, affine=True, track_running_stats=True)
+        self.batch_norm3 = nn.InstanceNorm2d(64, affine=True, track_running_stats=True)
+        self.conv_batch_norm=nn.InstanceNorm2d(1024, affine=True, track_running_stats=True)
+
+        # leaky relu layers
+        self.relu1 = torch.nn.LeakyReLU(0.2)
+        self.relu2 = torch.nn.LeakyReLU(0.2)
+        self.relu3 = torch.nn.LeakyReLU(0.2)
+        self.relu4 = torch.nn.LeakyReLU(0.2)
+        self.relu5 = torch.nn.LeakyReLU(0.2)
+
+
+    def forward(self,input,labels):
+        """
+        Generates synthetic images of the shape [batch_size,128,128,3]
+        :param input: Latent vector + attributes of the shape [batch_size,z+l]
+        :return: synthetic images of the shape [batch_size,128,128,3]
+        """
+        # creating the embedding
+        embedding=self.embedding(labels)
+        assert embedding.shape == (input.shape[0], 50), " check generator embedding shape {} ".format(embedding.shape)
+        embedding=self.dense2(embedding)
+        embedding=torch.reshape(embedding,(input.shape[0],1,4,4))
+
+        input = torch.reshape(input, (input.shape[0],self.l,1,1) )
+        x=self.conv(input)
+        x = self.conv_batch_norm(x)
+        x=self.relu1(x)
+
+
+        assert x.shape==(input.shape[0],1024,4,4), 'check generators first conv layer'
+
+        # concatenating embedding
+        x=torch.cat((x,embedding),axis=1);
+
+        assert x.shape == (input.shape[0],1025,4,4), "check embedding concatenation"
+
+        x = self.conv0(x)
+        x = self.batch_norm0(x)
+        x = self.relu2(x)
+
+        x=self.conv1(x)
+        x = self.batch_norm1(x)
+        x = self.relu3(x)
+
+        x = self.conv2(x)
+        x = self.batch_norm2(x)
+        x = self.relu4(x)
+
+
+        x = self.conv3(x)
+        x = self.batch_norm3(x)
+        x = self.relu5(x)
+
+
+        x = self.conv4(x)
+
+        return x
+
