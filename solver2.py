@@ -10,6 +10,7 @@ import time
 import datetime
 import torchvision
 from PIL import Image
+import shutil
 
 
 class Solver(object):
@@ -47,6 +48,7 @@ class Solver(object):
         self.resume_iters = config.resume_iters
         self.selected_attrs = config.selected_attrs
         self.l=config.l
+        self.load_opt=config.load_opt
 
         # Test configurations.
         self.test_iters = config.test_iters
@@ -105,10 +107,12 @@ class Solver(object):
         :param opt_g: optimizer_g instance
         :param opt_d: optimizer_d instance
         """
-        if (self.model_save_dir not in os.listdir()):
-            os.mkdir(self.model_save_dir)
-        if (len(os.listdir(self.model_save_dir)) >= 1):
-            os.remove(self.model_save_dir+'/' + os.listdir('Checkpoints')[-1])
+        # deleting existing checkpoints
+        if len(os.listdir(self.model_save_dir)) >= 1:
+            for i in os.listdir(self.model_save_dir):
+                if i.split('.')[-1] == "pt":
+                    os.remove(self.model_save_dir+"/"+i)
+
         path = self.model_save_dir + '/'+str(epoch) + '.pt'
         torch.save({
             'generator': gen.state_dict(),
@@ -120,18 +124,20 @@ class Solver(object):
 
     def restore_model(self, resume_iters):
         """Restore the trained generator and discriminator."""
-        assert self.model_save_dir in os.listdir(), "No saved checkpoints found"
-        path = self.model_save_dir+'/' + os.listdir(self.model_save_dir)[0]
+        path = self.model_save_dir+'/' + str(resume_iters)+'.pt'
         checkpoint = torch.load(path, map_location=self.device)
 
         self.G.load_state_dict(checkpoint['generator'])
         self.D.load_state_dict(checkpoint['discriminator'])
         self.G.to(self.device)
         self.D.to(self.device)
-        optimizer_d = torch.optim.Adam(self.D.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        optimizer_g = torch.optim.Adam(self.G.parameters(), lr=0.0002, betas=(0.5, 0.999))
-        optimizer_d.load_state_dict(checkpoint['optimizer_d'])
-        optimizer_g.load_state_dict(checkpoint['optimizer_g'])
+
+        if self.load_opt:
+            optimizer_d = torch.optim.Adam(self.D.parameters())
+            optimizer_g = torch.optim.Adam(self.G.parameters())
+            optimizer_d.load_state_dict(checkpoint['optimizer_d'])
+            optimizer_g.load_state_dict(checkpoint['optimizer_g'])
+            print("Loading the optimizer from {}th checkpont ".format(checkpoint['epoch']))
 
         print('Loading the trained models from step {}...'.format(checkpoint['epoch']))
 
@@ -350,6 +356,7 @@ class Solver(object):
             if (i + 1) % self.model_save_step == 0 or i == (start_iters+self.num_iters-1):
                 self.save_checkpoints(self.G,self.D,self.g_optimizer,self.d_optimizer,i+1)
                 print('Saved model checkpoints into {}...'.format(self.model_save_dir))
+                self.visualize(epochs=i+1)
 
             # Decay learning rates.
             if (i + 1) % self.lr_update_step == 0 and (i + 1) > (self.num_iters - self.num_iters_decay):
@@ -385,6 +392,32 @@ class Solver(object):
         img = img * 127.5 + 127.5;
         img = Image.fromarray(img.astype('uint8'))
         img.save('grid_result_' + str(self.test_iters) + 'fat.png')
+
+    def visualize(self,epochs):
+        """visualizing images during training"""
+        self.G.eval()
+        z=torch.randn((self.n_samples,self.l)).to(self.device)
+        labels1=torch.ones((self.n_samples,)).long().to(self.device)
+        labels0 = torch.zeros((self.n_samples,)).long().to(self.device)
+        fake_images0 = self.G(z, labels0).detach().cpu()
+        fake_images1 = self.G(z, labels1).detach().cpu()
+
+        # saving the images
+        img = np.transpose(torchvision.utils.make_grid(fake_images1, nrow=8, padding=2), (1, 2, 0))
+        img = img.numpy()
+        img = img * 127.5 + 127.5;
+        img = Image.fromarray(img.astype('uint8'))
+        img.save(self.sample_dir + '/' + 'grid_result_' + str(epochs) + 'thin.png')
+
+        # saving the images
+        img = np.transpose(torchvision.utils.make_grid(fake_images0, nrow=8, padding=2), (1, 2, 0))
+        img = img.numpy()
+        img = img * 127.5 + 127.5;
+        img = Image.fromarray(img.astype('uint8'))
+        img.save(self.sample_dir + '/' + 'grid_result_' + str(epochs) + 'fat.png')
+
+        # setting the generator back to training mode
+        self.G.train()
 
 
 

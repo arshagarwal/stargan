@@ -82,6 +82,7 @@ if __name__ == '__main__':
     parser.add_argument('--selected_attrs', '--list', nargs='+', help='selected attributes for the CelebA dataset',
                         default=['Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Male', 'Young'])
     parser.add_argument('--l', type=int, default=100, help='number of noise units')
+    parser.add_argument("--load_opt", action="store_true", help="flag that decides wheather to reload optimizer state when loading checkpoints ")
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
@@ -97,14 +98,14 @@ if __name__ == '__main__':
     parser.add_argument('--attr_path', type=str, default='data/celeba/list_attr_celeba.txt')
     parser.add_argument('--rafd_image_dir', type=str, default='data/RaFD/train')
     parser.add_argument('--log_dir', type=str, default='stargan/logs')
-    parser.add_argument('--model_save_dir', type=str, default='Checkpoints')
+    parser.add_argument('--model_save_dir', type=str, default='stargan/Checkpoints')
     parser.add_argument('--sample_dir', type=str, default='stargan/samples')
     parser.add_argument('--result_dir', type=str, default='stargan/results')
 
     # Step size.
     parser.add_argument('--log_step', type=int, default=1)
     parser.add_argument('--sample_step', type=int, default=1000)
-    parser.add_argument('--model_save_step', type=int, default=10000)
+    parser.add_argument('--model_save_step', type=int, default=10)
     parser.add_argument('--lr_update_step', type=int, default=1000)
 
     config = parser.parse_args()
