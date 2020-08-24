@@ -44,8 +44,10 @@ class Attention(nn.Module):
         assert attn_g.shape == x.shape,"check Attention Module"
 
         assert self.sigma.device==attn_g.device, "check device allocation in Attention Module"
+        assert x.device==self.sigma.device, "x.device {} sigma.device {}".format(x.device,self.sigma.device)
 
         res=self.sigma*attn_g + x
+
 
         assert res.shape==(B,C,H,W), "check Attention Module"
 
@@ -88,8 +90,10 @@ class Generator(nn.Module):
         # Bottleneck layers.
         for i in range(repeat_num):
             layers.append(ResidualBlock(dim_in=curr_dim, dim_out=curr_dim))
+            if i==1:
+                layers.append(Attention(curr_dim))
 
-        layers.append(Attention(curr_dim))
+
         # Up-sampling layers.
         for i in range(2):
             layers.append(SPN(nn.ConvTranspose2d(curr_dim, curr_dim//2, kernel_size=4, stride=2, padding=1, bias=False)))
