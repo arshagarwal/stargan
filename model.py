@@ -43,7 +43,13 @@ class Attention(nn.Module):
 
         assert attn_g.shape == x.shape,"check Attention Module"
 
-        return self.sigma*attn_g + x
+        assert self.sigma.device==attn_g.device, "check device allocation in Attention Module"
+
+        res=self.sigma*attn_g + x
+
+        assert res.shape==(B,C,H,W), "check Attention Module"
+
+        return res
 
 
 class ResidualBlock(nn.Module):
