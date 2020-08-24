@@ -10,7 +10,7 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         self.in_channels=in_channels
 
-        self.sigma=torch.tensor(0.0,requires_grad=True)
+        self.sigma=torch.nn.parameter.Parameter(torch.tensor(0.0,requires_grad=True))
 
         self.maxPool=nn.MaxPool2d(kernel_size=2)
 
