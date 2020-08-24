@@ -4,6 +4,47 @@ import torch.nn.functional as F
 import numpy as np
 import torch.nn.utils.spectral_norm as SPN
 
+class Attention(nn.Module):
+    """Attention module as per SA-GAN official implementation"""
+    def __init__(self,in_channels):
+        super(Attention, self).__init__()
+        self.in_channels=in_channels
+
+        self.sigma=torch.tensor(0.0,requires_grad=True)
+
+        self.maxPool=nn.MaxPool2d(kernel_size=2)
+
+        self.theta=SPN(nn.Conv2d(self.in_channels,self.in_channels//8,1,1,bias=False))
+        self.phi=SPN(nn.Conv2d(self.in_channels,self.in_channels//8,1,1,bias=False))
+        self.g=SPN(nn.Conv2d(self.in_channels,self.in_channels//2,1,1,bias=False))
+        self.final=SPN(nn.Conv2d(self.in_channels//2,self.in_channels,1,1,bias=False))
+
+    def forward(self,x):
+        (B,C,H,W)=x.shape
+        theta = self.theta(x)
+        theta = torch.reshape(theta,(theta.shape[0],theta.shape[1],-1)).permute(0,2,1) # shape (B,H*W,C/8)
+        assert theta.shape == (B, H*W,self.in_channels // 8), "check theta shape Attention Module"
+
+        phi = self.maxPool(self.phi(x))
+        phi = torch.reshape(phi,(x.shape[0],self.in_channels//8,-1)) # shape(B,C/8,H*W/4)
+
+        assert phi.shape == (B,self.in_channels//8,H*W/4), "check phi shape Attention Module"
+
+        attn = torch.bmm(theta,phi)
+        attn = torch.softmax(attn,dim=-1) # shape(B,H*W,H*W/4)
+
+        g = self.maxPool(self.g(x))
+        g=torch.reshape(g,(x.shape[0],self.in_channels//2,-1)) # shape=(B,C/2,H*w/4)
+        g = g.permute(0,2,1) # shape=(B,H*W/4,C/2)
+
+        attn_g = torch.bmm(attn,g).permute(0,2,1) # shape=(B,C/2,H*W)
+        attn_g=torch.reshape(attn_g,(B,self.in_channels//2,H,W))
+        attn_g = self.final(attn_g)
+
+        assert attn_g.shape == x.shape,"check Attention Module"
+
+        return self.sigma*attn_g + x
+
 
 class ResidualBlock(nn.Module):
     """Residual Block with instance normalization."""
@@ -42,6 +83,7 @@ class Generator(nn.Module):
         for i in range(repeat_num):
             layers.append(ResidualBlock(dim_in=curr_dim, dim_out=curr_dim))
 
+        layers.append(Attention(curr_dim))
         # Up-sampling layers.
         for i in range(2):
             layers.append(SPN(nn.ConvTranspose2d(curr_dim, curr_dim//2, kernel_size=4, stride=2, padding=1, bias=False)))
@@ -76,6 +118,8 @@ class Discriminator(nn.Module):
             layers.append(SPN(nn.Conv2d(curr_dim, curr_dim*2, kernel_size=4, stride=2, padding=1)))
             layers.append(nn.LeakyReLU(0.01))
             curr_dim = curr_dim * 2
+            if i == 1:
+                layers.append(Attention(curr_dim))
 
         kernel_size = int(image_size / np.power(2, repeat_num))
         self.main = nn.Sequential(*layers)
@@ -87,3 +131,4 @@ class Discriminator(nn.Module):
         out_src = self.conv1(h)
         out_cls = self.conv2(h)
         return out_src, out_cls.view(out_cls.size(0), out_cls.size(1))
+
